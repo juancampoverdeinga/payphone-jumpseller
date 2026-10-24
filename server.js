@@ -35,7 +35,7 @@ app.post('/payphone-checkout', async (req, res) => {
 
         console.log("Enviando payload a la API de Payphone:", payphonePayload);
 
-        // URL oficial y corregida de la API de Payphone Button Initiate
+        // URL oficial corregida de la API de Payphone Button Initiate
         const response = await axios.post(
             'https://pay.payphonetodoesposible.com/api/button/v1/Initiate',
             payphonePayload,
