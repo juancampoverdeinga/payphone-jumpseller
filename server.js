@@ -1,5 +1,5 @@
 const express = require('express');
-const axios = require('axios');
+const axios = express ? require('axios') : null;
 
 const app = express();
 
@@ -10,10 +10,10 @@ const PAYPHONE_TOKEN = 'EqmX-vHvgmYR50YSZYmSpeCr7lc_y-9a8eJMDkbpuJf-adH1qCKKrvx1
 
 app.post('/payphone-checkout', async (req, res) => {
     try {
-        console.log("=== Nueva petición de pago recibida de Jumpseller ===");
-        console.log("Cuerpo de la petición:", req.body);
-
+        console.log("=== NUEVA PETICIÓN RECIBIDA DE JUMPSELLER ===");
         const orderData = req.body.order || req.body;
+        console.log("Datos de la orden procesados:", JSON.stringify(orderData));
+
         const rawAmount = orderData.total || orderData.amount || 0;
         const amountInCents = Math.round(parseFloat(rawAmount) * 100);
 
@@ -33,40 +33,41 @@ app.post('/payphone-checkout', async (req, res) => {
             cancellationUrl: "https://pay.payphonetodoesposible.com/payphone/cancel"
         };
 
-        console.log("Enviando payload a la API de Payphone:", payphonePayload);
+        const targetUrl = 'https://pay.payphonetodoesposible.com/api/button/v1/Initiate';
+        console.log("Conectando estrictamente a la URL:", targetUrl);
+        console.log("Payload enviado:", payphonePayload);
 
-        // URL oficial corregida de la API de Payphone Button Initiate
-        const response = await axios.post(
-            'https://pay.payphonetodoesposible.com/api/button/v1/Initiate',
-            payphonePayload,
-            {
-                headers: {
-                    'Authorization': `Bearer ${PAYPHONE_TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
+        const response = await axios.post(targetUrl, payphonePayload, {
+            headers: {
+                'Authorization': `Bearer ${PAYPHONE_TOKEN}`,
+                'Content-Type': 'application/json'
             }
-        );
+        });
 
-        console.log("Respuesta obtenida de Payphone:", response.data);
+        console.log("Respuesta exitosa de Payphone:", response.data);
 
         if (response.data && response.data.payWithCard) {
             return res.redirect(response.data.payWithCard);
         } else if (response.data && response.data.payWithPayPhone) {
             return res.redirect(response.data.payWithPayPhone);
         } else {
-            console.error("No se generó el enlace de pago en la respuesta de Payphone.");
-            return res.status(500).send("Error al generar el enlace de pago con Payphone.");
+            return res.status(500).send("Payphone respondió pero sin enlaces de pago.");
         }
 
     } catch (error) {
-        const errorDetails = error.response ? error.response.data : error.message;
-        console.error("Error al procesar la solicitud de pago:", errorDetails);
+        console.error("--- ERROR DETALLADO DE PAYPHONE ---");
+        if (error.response) {
+            console.error("Status HTTP:", error.response.status);
+            console.error("Datos de error del servidor de Payphone:", error.response.data);
+        } else {
+            console.error("Error de red o configuración:", error.message);
+        }
         return res.status(500).send("Error interno en el servidor puente.");
     }
 });
 
 app.get('/', (req, res) => {
-    res.send("Servidor puente Payphone-Jumpseller activo y operativo en la nube.");
+    res.send("Servidor puente activo y actualizado.");
 });
 
 const PORT = process.env.PORT || 3000;
