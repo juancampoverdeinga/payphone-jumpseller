@@ -10,7 +10,7 @@ const PAYPHONE_TOKEN = 'EqmX-vHvgmYR50YSZYmSpeCr7lc_y-9a8eJMDkbpuJf-adH1qCKKrvx1
 
 app.post('/payphone-checkout', async (req, res) => {
     try {
-        console.log("=== NUEVA PETICIÓN RECIBIDA DE JUMPSELLER ===");
+        console.log("=== NUEVA ORDEN DE JUMPSELLER ===");
         const orderData = req.body.order || req.body;
 
         const rawAmount = orderData.total || orderData.amount || 0;
@@ -32,9 +32,10 @@ app.post('/payphone-checkout', async (req, res) => {
             cancellationUrl: "https://pay.payphonetodoesposible.com/payphone/cancel"
         };
 
-        // Endpoint oficial de Payphone
-        const targetUrl = 'https://pay.payphonetodoesposible.com/api/button/v2/Prepare';
-        console.log("Conectando a Payphone:", targetUrl);
+        // Probemos la ruta estándar de la API V1 de botones directos de Payphone
+        const targetUrl = 'https://pay.payphonetodoesposible.com/api/button/v1/Initiate';
+        console.log("URL usada:", targetUrl);
+        console.log("Payload enviado:", JSON.stringify(payphonePayload));
 
         const response = await axios.post(targetUrl, payphonePayload, {
             headers: {
@@ -43,36 +44,34 @@ app.post('/payphone-checkout', async (req, res) => {
             }
         });
 
-        console.log("Respuesta de Payphone:", response.data);
+        console.log("Respuesta completa de Payphone:", response.data);
 
-        // Redirección hacia la pasarela de pago según la respuesta obtenida
         if (response.data && response.data.payWithCard) {
             return res.redirect(response.data.payWithCard);
         } else if (response.data && response.data.payWithPayPhone) {
             return res.redirect(response.data.payWithPayPhone);
-        } else if (typeof response.data === 'string' && response.data.startsWith('http')) {
-            return res.redirect(response.data);
         } else {
-            return res.status(500).send("Payphone respondió pero no devolvió URL de pago.");
+            return res.status(500).send("Payphone no devolvió los links de redirección.");
         }
 
     } catch (error) {
-        console.error("--- ERROR DETALLADO DE PAYPHONE ---");
+        console.error("=== ERROR HTTP DE PAYPHONE ===");
         if (error.response) {
-            console.error("Status HTTP:", error.response.status);
-            console.error("Datos del error:", error.response.data);
+            console.error("Status:", error.response.status);
+            console.error("Data:", JSON.stringify(error.response.data));
+            console.error("Headers:", error.response.headers);
         } else {
-            console.error("Mensaje de error:", error.message);
+            console.error("Error general:", error.message);
         }
         return res.status(500).send("Error interno en el servidor puente.");
     }
 });
 
 app.get('/', (req, res) => {
-    res.send("Servidor puente Payphone-Jumpseller activo y operativo en la nube.");
+    res.send("Servidor puente activo.");
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Servidor escuchando en el puerto ${PORT}`);
+    console.log(`Servidor en puerto ${PORT}`);
 });
