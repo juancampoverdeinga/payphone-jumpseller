@@ -12,20 +12,19 @@ app.post('/payphone-checkout', async (req, res) => {
     try {
         console.log("=== NUEVA PETICIÓN RECIBIDA DE JUMPSELLER ===");
         const orderData = req.body.order || req.body;
-        console.log("Datos crudos de Jumpseller:", JSON.stringify(orderData));
 
-        // Extracción segura del monto y conversión estricta a enteros (centavos)
         const rawAmount = orderData.total || orderData.amount || 1.00;
         const amountInCents = Math.round(Number(rawAmount) * 100);
 
         const clientTransactionId = String(orderData.id || Date.now());
         const email = orderData.customer?.email || orderData.email || 'cliente@tienda.com';
         
-        // Limpieza y validación estricta del teléfono (solo dígitos, por defecto Ecuador 593 o 09...)
-        let rawPhone = orderData.customer?.phone || orderData.phone || '0999999999';
-        let cleanPhone = rawPhone.replace(/\D/g, ''); // Remueve todo lo que no sea número
-        if (cleanPhone.length < 7) {
-            cleanPhone = '0999999999'; // Valor por defecto seguro si viene vacío
+        // Validación estricta del teléfono para Payphone (Ecuador: 10 dígitos empezando en 09)
+        let rawPhone = orderData.customer?.phone || orderData.phone || '';
+        let cleanPhone = rawPhone.replace(/\D/g, ''); // Deja solo números
+        
+        if (cleanPhone.length < 9) {
+            cleanPhone = '0999999999'; // Número por defecto válido si está vacío o incompleto
         }
 
         const payphonePayload = {
@@ -41,7 +40,7 @@ app.post('/payphone-checkout', async (req, res) => {
         };
 
         const targetUrl = 'https://pay.payphonetodoesposible.com/api/button/v2/Prepare';
-        console.log("Enviando payload depurado a Payphone:", JSON.stringify(payphonePayload));
+        console.log("Enviando payload a Payphone con teléfono:", cleanPhone);
 
         const response = await axios.post(targetUrl, payphonePayload, {
             headers: {
@@ -57,7 +56,6 @@ app.post('/payphone-checkout', async (req, res) => {
         } else if (response.data && response.data.payWithPayPhone) {
             return res.redirect(response.data.payWithPayPhone);
         } else if (response.data && response.data.paymentId) {
-            // Enlace alternativo si la v2 devuelve el ID de pago para armar pasarela
             return res.redirect(`https://pay.payphonetodoesposible.com/link?id=${response.data.paymentId}`);
         } else {
             return res.status(500).send("Payphone procesó la orden pero no devolvió pasarela de pago.");
