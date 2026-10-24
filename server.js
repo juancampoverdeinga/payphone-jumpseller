@@ -10,15 +10,23 @@ const PAYPHONE_TOKEN = 'EqmX-vHvgmYR50YSZYmSpeCr7lc_y-9a8eJMDkbpuJf-adH1qCKKrvx1
 
 app.post('/payphone-checkout', async (req, res) => {
     try {
-        console.log("=== NUEVA ORDEN DE JUMPSELLER ===");
+        console.log("=== NUEVA PETICIÓN RECIBIDA DE JUMPSELLER ===");
         const orderData = req.body.order || req.body;
+        console.log("Datos crudos de Jumpseller:", JSON.stringify(orderData));
 
-        const rawAmount = orderData.total || orderData.amount || 0;
-        const amountInCents = Math.round(parseFloat(rawAmount) * 100);
+        // Extracción segura del monto y conversión estricta a enteros (centavos)
+        const rawAmount = orderData.total || orderData.amount || 1.00;
+        const amountInCents = Math.round(Number(rawAmount) * 100);
 
         const clientTransactionId = String(orderData.id || Date.now());
         const email = orderData.customer?.email || orderData.email || 'cliente@tienda.com';
-        const phone = orderData.customer?.phone || orderData.phone || '0999999999';
+        
+        // Limpieza y validación estricta del teléfono (solo dígitos, por defecto Ecuador 593 o 09...)
+        let rawPhone = orderData.customer?.phone || orderData.phone || '0999999999';
+        let cleanPhone = rawPhone.replace(/\D/g, ''); // Remueve todo lo que no sea número
+        if (cleanPhone.length < 7) {
+            cleanPhone = '0999999999'; // Valor por defecto seguro si viene vacío
+        }
 
         const payphonePayload = {
             amount: amountInCents,
@@ -27,15 +35,13 @@ app.post('/payphone-checkout', async (req, res) => {
             currency: "USD",
             clientTransactionId: clientTransactionId,
             email: email,
-            phoneNumber: phone,
+            phoneNumber: cleanPhone,
             responseUrl: "https://pay.payphonetodoesposible.com/payphone/response",
             cancellationUrl: "https://pay.payphonetodoesposible.com/payphone/cancel"
         };
 
-        // Probemos la ruta estándar de la API V1 de botones directos de Payphone
-        const targetUrl = 'https://pay.payphonetodoesposible.com/api/button/v1/Initiate';
-        console.log("URL usada:", targetUrl);
-        console.log("Payload enviado:", JSON.stringify(payphonePayload));
+        const targetUrl = 'https://pay.payphonetodoesposible.com/api/button/v2/Prepare';
+        console.log("Enviando payload depurado a Payphone:", JSON.stringify(payphonePayload));
 
         const response = await axios.post(targetUrl, payphonePayload, {
             headers: {
@@ -44,34 +50,36 @@ app.post('/payphone-checkout', async (req, res) => {
             }
         });
 
-        console.log("Respuesta completa de Payphone:", response.data);
+        console.log("Respuesta exitosa de Payphone:", response.data);
 
         if (response.data && response.data.payWithCard) {
             return res.redirect(response.data.payWithCard);
         } else if (response.data && response.data.payWithPayPhone) {
             return res.redirect(response.data.payWithPayPhone);
+        } else if (response.data && response.data.paymentId) {
+            // Enlace alternativo si la v2 devuelve el ID de pago para armar pasarela
+            return res.redirect(`https://pay.payphonetodoesposible.com/link?id=${response.data.paymentId}`);
         } else {
-            return res.status(500).send("Payphone no devolvió los links de redirección.");
+            return res.status(500).send("Payphone procesó la orden pero no devolvió pasarela de pago.");
         }
 
     } catch (error) {
-        console.error("=== ERROR HTTP DE PAYPHONE ===");
+        console.error("--- ERROR DETALLADO DE PAYPHONE ---");
         if (error.response) {
-            console.error("Status:", error.response.status);
-            console.error("Data:", JSON.stringify(error.response.data));
-            console.error("Headers:", error.response.headers);
+            console.error("Status HTTP:", error.response.status);
+            console.error("Datos del error de Payphone:", JSON.stringify(error.response.data));
         } else {
-            console.error("Error general:", error.message);
+            console.error("Mensaje de error interno:", error.message);
         }
         return res.status(500).send("Error interno en el servidor puente.");
     }
 });
 
 app.get('/', (req, res) => {
-    res.send("Servidor puente activo.");
+    res.send("Servidor puente activo y depurado.");
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Servidor en puerto ${PORT}`);
+    console.log(`Servidor escuchando en el puerto ${PORT}`);
 });
